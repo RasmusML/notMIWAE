@@ -25,8 +25,8 @@ class MIWAE:
         self.n, self.d = X.shape
 
         # ---- missing
-        self.S = np.array(~np.isnan(X), dtype=np.float)
-        self.Sval = np.array(~np.isnan(Xval), dtype=np.float)
+        self.S = np.array(~np.isnan(X), dtype=np.float32)
+        self.Sval = np.array(~np.isnan(Xval), dtype=np.float32)
 
         if np.sum(self.S) < self.d * self.n:
             self.X = self.Xorg.copy()
@@ -51,13 +51,13 @@ class MIWAE:
         self.eps = np.finfo(float).eps
 
         print("Creating graph...")
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         # ---- input
-        with tf.variable_scope('input'):
-            self.x_pl = tf.placeholder(tf.float32, [None, self.d], 'x_pl')
-            self.s_pl = tf.placeholder(tf.float32, [None, self.d], 's_pl')
-            self.n_pl = tf.placeholder(tf.int32, shape=(), name='n_pl')
+        with tf.compat.v1.variable_scope('input'):
+            self.x_pl = tf.compat.v1.placeholder(tf.float32, [None, self.d], 'x_pl')
+            self.s_pl = tf.compat.v1.placeholder(tf.float32, [None, self.d], 's_pl')
+            self.n_pl = tf.compat.v1.placeholder(tf.int32, shape=(), name='n_pl')
 
         if learnable_imputation and not testing:
             self.imp = tf.get_variable('imp', shape=[1, self.d])
@@ -68,7 +68,7 @@ class MIWAE:
             self.in_pl = self.x_pl
 
         # ---- parameters from encoder
-        with tf.variable_scope('encoder'):
+        with tf.compat.v1.variable_scope('encoder'):
             self.q_mu, self.q_log_sig2 = self.encoder(self.in_pl)
 
         # ---- create distribution you can sample from
@@ -81,7 +81,7 @@ class MIWAE:
         # ---- parameters from decoder, gauss or bernoulli
         if out_dist in ['gauss', 'normal', 'truncated_normal']:
 
-            with tf.variable_scope('decoder'):
+            with tf.compat.v1.variable_scope('decoder'):
                 mu, std = self.gauss_decoder(self.l_z)
 
             # ---- p(x|z)
@@ -99,7 +99,7 @@ class MIWAE:
 
         elif out_dist in ['t', 't-distribution']:
 
-            with tf.variable_scope('decoder'):
+            with tf.compat.v1.variable_scope('decoder'):
                 mu, log_sig2, df = self.t_decoder(self.l_z)
 
             # ---- p(x|z)
@@ -115,7 +115,7 @@ class MIWAE:
 
         elif out_dist == 'bern':
 
-            with tf.variable_scope('decoder'):
+            with tf.compat.v1.variable_scope('decoder'):
                 logits = self.bernoulli_decoder(self.l_z)
 
             # ---- p(x|z)
@@ -145,26 +145,26 @@ class MIWAE:
         self.loss = -self.MIWAE
 
         # ---- training stuff
-        config = tf.ConfigProto()
+        config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        self.global_step = tf.Variable(initial_value=0, trainable=False)
+        self.sess = tf.compat.v1.Session(config=config)
+        self.global_step = tf.compat.v1.Variable(initial_value=0, trainable=False)
 
-        self.optimizer = tf.train.AdamOptimizer()
+        self.optimizer = tf.compat.v1.train.AdamOptimizer()
         if self.testing:
             tvars = tf.trainable_variables(scope='encoder')
         else:
-            tvars = tf.trainable_variables()
+            tvars = tf.compat.v1.trainable_variables()
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step, var_list=tvars)
 
-        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.compat.v1.global_variables_initializer())
 
         if permutation_invariance:
             svars = tf.trainable_variables('decoder')
             svars.append(self.global_step)
             self.saver = tf.train.Saver(svars)
         else:
-            self.saver = tf.train.Saver()
+            self.saver = tf.compat.v1.train.Saver()
 
         tf.summary.scalar('Evaluation/loss', self.loss)
         tf.summary.scalar('Evaluation/pxz', tf.reduce_mean(self.log_p_x_given_z))
@@ -172,11 +172,11 @@ class MIWAE:
         tf.summary.scalar('Evaluation/pz', tf.reduce_mean(self.log_p_z))
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.train_writer = tf.summary.FileWriter(name + '/tensorboard/miwae_train/{}/'.format(timestamp),
+        self.train_writer = tf.compat.v1.summary.FileWriter(name + '/tensorboard/miwae_train/{}/'.format(timestamp),
                                                   self.sess.graph)
-        self.val_writer = tf.summary.FileWriter(name + '/tensorboard/miwae_val/{}/'.format(timestamp),
+        self.val_writer = tf.compat.v1.summary.FileWriter(name + '/tensorboard/miwae_val/{}/'.format(timestamp),
                                                 self.sess.graph)
-        self.summaries = tf.summary.merge_all()
+        self.summaries = tf.compat.v1.summary.merge_all()
 
     def encoder(self, x):
 
@@ -235,7 +235,7 @@ class MIWAE:
         log_sum_w = tf.reduce_logsumexp(l_w, axis=1)
 
         # ---- average over samples
-        log_avg_weight = log_sum_w - tf.log(tf.cast(self.n_pl, tf.float32))
+        log_avg_weight = log_sum_w - tf.compat.v1.log(tf.cast(self.n_pl, tf.float32))
 
         # ---- average over minibatch to get the average llh
         return tf.reduce_mean(log_avg_weight, axis=-1)
@@ -316,7 +316,7 @@ class MIWAE:
         pz /= n_val_batches
         qzx /= n_val_batches
 
-        summary = tf.Summary()
+        summary = tf.compat.v1.Summary()
         summary.value.add(tag="Evaluation/loss", simple_value=val_loss)
         summary.value.add(tag="Evaluation/pxz", simple_value=pxz)
         summary.value.add(tag="Evaluation/qzx", simple_value=qzx)
@@ -328,12 +328,16 @@ class MIWAE:
         x_batch = self.X[self.batch_pointer: self.batch_pointer + batch_size, :]
         s_batch = self.S[self.batch_pointer: self.batch_pointer + batch_size, :]
 
+        _, _loss, _step = self.sess.run([self.train_op, self.loss, self.global_step], {self.x_pl: x_batch, self.s_pl: s_batch, self.n_pl: self.n_samples})
+
+        """
         _step, _summaries= \
             self.sess.run([self.global_step, self.summaries],
                           {self.x_pl: x_batch, self.s_pl: s_batch, self.n_pl: self.n_samples})
 
         self.train_writer.add_summary(_summaries, _step)
         self.train_writer.flush()
+        """
 
         return val_loss
 
