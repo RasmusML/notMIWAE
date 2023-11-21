@@ -18,9 +18,12 @@ class notMIWAE:
                  embedding_size=20,
                  code_size=20,
                  n_missing_trends=1,
-                 missing_process='selfmask',
+                 missing_process='selfmasking',
                  testing=False,
+                 mechanism_weight=1,
                  name='/tmp/notMIWAE'):
+
+        self.mechanism_weight = mechanism_weight
 
         # ---- data
         self.Xorg = X.copy()
@@ -150,7 +153,7 @@ class notMIWAE:
         self.p_s_given_x = tfp.distributions.Bernoulli(logits=self.logits_miss)  # (probs=self.s + self.eps)
 
         # ---- evaluate s in p(s|x)
-        self.log_p_s_given_x = tf.reduce_sum(self.p_s_given_x.log_prob(tf.expand_dims(self.s_pl, axis=1)), axis=-1)
+        self.log_p_s_given_x = tf.reduce_sum(self.mechanism_weight * self.p_s_given_x.log_prob(tf.expand_dims(self.s_pl, axis=1)), axis=-1)
 
         # --- evaluate the z-samples in q(z|x)
         q_z2 = tfp.distributions.Normal(loc=tf.expand_dims(self.q_mu, axis=1),
@@ -267,16 +270,25 @@ class notMIWAE:
             self.W = tf.compat.v1.get_variable('W', shape=[1, 1, self.n_missing_trends])
             self.b = tf.compat.v1.get_variable('b', shape=[1, 1, self.n_missing_trends])
 
-            logits = -self.W * (z - self.b)
+            #logits = -self.W * (z - self.b)
+            logits = self.W * z + self.b
 
         elif self.missing_process == 'selfmasking_known':
 
+            """
             self.W = tf.compat.v1.get_variable('W', shape=[1, 1, self.n_missing_trends])
             #self.W = tf.nn.softplus(self.W)
             self.W = -tf.nn.softplus(self.W) # @NOTE: increasing S-curve
             self.b = tf.compat.v1.get_variable('b', shape=[1, 1, self.n_missing_trends])
 
             logits = - self.W * (z - self.b)
+            """
+
+            self.W = 2
+            self.b = -14
+
+            logits = self.W * z + self.b
+
 
         elif self.missing_process == 'linear':
 
